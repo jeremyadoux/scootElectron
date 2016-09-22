@@ -1,12 +1,25 @@
 (function() {
   'use strict';
 
-  const {ipcRenderer} = require('electron')
-  //console.log(ipcRenderer.sendSync('synchronous-message', 'ping')) // prints "pong"
+  angular
+      .module('app', [])
+      .controller("favoriteCtrl", favoriteCtrl);
 
-  ipcRenderer.on('asynchronous-reply', (event, arg) => {
-    console.log(arg) // prints "pong"
-  })
-  ipcRenderer.send('asynchronous-message', 'ping')
+  favoriteCtrl.$inject = ['$scope'];
 
+  function favoriteCtrl($scope) {
+    const {ipcRenderer} = require('electron');
+    var vm = this;
+
+    //@Method
+
+    //@Variable
+
+
+    ipcRenderer.send('load-group-list', null);
+
+    ipcRenderer.on('group-list-loaded', (event, arg) => {
+      console.log(arg); 
+    });
+  }
 })();
