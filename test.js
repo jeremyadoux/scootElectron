@@ -8,8 +8,8 @@ let account = {
     authenticate: {
         header: {
             $: {
-                login: "api",
-                password: "VDocAPI",
+                login: "",
+                password: "",
                 timeout: 30
             }
         }
