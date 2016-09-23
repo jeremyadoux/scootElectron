@@ -11,6 +11,7 @@ const http = require('http');
 const storageGroupMailName = "groupMailList";
 const storageGroupList = "groupList";
 const storageAccountPassword = "accountPassword";
+const storageFavoriteGroup = "favoriteGroup";
 let winAccount = null;
 let winFavorite = null;
 let tray = null;
@@ -19,11 +20,12 @@ let builder = new xml2js.Builder();
 let authenticateToken;
 
 app.on('ready', () => {
-  executeIntroduction().then(createTray, function() {});
+  createTray();
+  executeIntroduction().then( function() {});
 });
 
 ipcMain.on('authentication-message', (event, arg) => {
-  getTokenAuthentication(arg.login, arg.password, function(body, err) {
+  getTokenAuthentication(arg.login, arg.password).then(function(body, err) {
     if(typeof body != 'undefined' && typeof body.authenticate != 'undefined') {
       storage.set(storageAccountPassword, {login: arg.login, password: arg.password}, (error) => {
         if (error) throw error;
@@ -31,19 +33,56 @@ ipcMain.on('authentication-message', (event, arg) => {
       authenticateToken = body.authenticate.body["0"].token["0"].$.key;
 
       createTray();
+      winAccount.hide();
     } else {
       event.sender.send('authentication-failed', null);
     }
+  }, function(e) {
+    event.sender.send('authentication-failed', null);
   });
 });
 
 ipcMain.on('load-group-list', (event, arg) => {
   executeIntroduction().then(function() {
     getListGroupUser().then(function(groupList) {
-      event.sender.send('group-list-loaded', groupList);
+      addFavoriteOnGroupList(groupList).then(function(data) {
+        event.sender.send('group-list-loaded', data);
+      })
+    });
+  }, function(e) {
+    storage.get(storageGroupList, (error, data) => {
+      if (error) throw error;
+      addFavoriteOnGroupList(data).then(function(data) {
+        event.sender.send('group-list-loaded', data);
+      })
     });
   });
 });
+
+ipcMain.on('save-group-favorite', (event, arg) => {
+  storage.set(storageFavoriteGroup, arg, (error) => {
+    if (error) throw error;
+    createTray();
+    winFavorite.hide();
+  });
+});
+
+function addFavoriteOnGroupList(groupList) {
+  return new promise((resolve, reject) => {
+    storage.get(storageFavoriteGroup, (error, data) => {
+      if (error) throw error;
+      for (var i in groupList.view.body["0"].organization["0"].group) {
+        for (var j in data) {
+          if (groupList.view.body["0"].organization["0"].group[i].$.id == data[j].$.id) {
+            groupList.view.body["0"].organization["0"].group[i].favorite = data[j].favorite;
+          }
+        }
+      }
+
+      resolve(groupList);
+    });
+  });
+}
 
 function openWindowAccount () {
   if(winAccount != null) {
@@ -81,8 +120,136 @@ function openWindowFavorite () {
   }
 }
 
-function getGroupListFavorite() {
+/*
 
+ <?xml version="1.0" encoding="UTF-8"?>
+ <view xmlns:vw1="http://www.axemble.com/vdoc/view">
+   <header>
+     <configuration>
+      <param name="maxlevel" value="-1" />
+     </configuration>
+     <scopes>
+      <group protocol-uri="uri://vdoc/group/143" />
+     </scopes>
+     <definition class="com.axemble.vdoc.sdk.interfaces.IGroup" >
+        <definition class="com.axemble.vdoc.sdk.interfaces.IUser" />
+     </definition>
+   </header>
+ </view>
+
+ */
+function getGroupMailList(idGroup) {
+  return new promise((resolve, reject) => {
+    storage.get(storageAccountPassword, (error, data) => {
+      if (error) throw error;
+      if (typeof data.login != 'undefined' && data.password != 'undefined') {
+        getTokenAuthentication(data.login, data.password).then(function (body, err) {
+          if (typeof body != 'undefined' && typeof body.authenticate != 'undefined') {
+            authenticateToken = body.authenticate.body["0"].token["0"].$.key;
+
+            let xmlJson = {
+              view: {
+                $: {
+                  'mlns:vw1': 'http://www.axemble.com/vdoc/view'
+                },
+                header: {
+                  configuration: {
+                    param: {
+                      $: {
+                        name: 'maxlevel',
+                        value: -1
+                      }
+                    }
+                  },
+                  scopes: {
+                    group: {
+                      $: {
+                        "protocol-uri": "uri://vdoc/group/"+idGroup
+                      }
+                    }
+                  },
+                  definition: {
+                    $: {
+                      class: 'com.axemble.vdoc.sdk.interfaces.IGroup'
+                    },
+                    definition: {
+                      $: {
+                        class: 'com.axemble.vdoc.sdk.interfaces.IUser'
+                      }
+                    }
+                  }
+                }
+              }
+            };
+
+            let xml = builder.buildObject(xmlJson);
+
+            let options = {
+              host : "vdoc-prod.vdocsuite.com",
+              path : '/vdoc/navigation/flow?module=directory&cmd=view&_AuthenticationKey='+authenticateToken,
+              method: "POST"
+            };
+
+            executeRequest(options, xml).then(function(e) {
+              parser.parseString(e, function (err, result) {
+                storage.get(storageFavoriteGroup, (error, groupList) => {
+                  Array.from(groupList).forEach(function(group) {
+                    if(group.$.id == idGroup) {
+                      group.mailList = ['biloute@test.com'];
+                      storage.set(storageFavoriteGroup, group, (error) => {
+                        if (error) throw error;
+
+                        resolve(group.mailList);
+                      });
+                    }
+                  });
+                });
+              });
+            });
+          } else {
+            storage.get(storageFavoriteGroup, (error, groupList) => {
+              Array.from(groupList).forEach(function(group) {
+                if(group.$.id == idGroup) {
+                  if(typeof group.mailList != 'undefined' && group.mailList.length > 0) {
+                    resolve(group.mailList);
+                  } else {
+                    reject();
+                    openWindowAccount();
+                  }
+                }
+              });
+            });
+          }
+        }, function(e) {
+          storage.get(storageFavoriteGroup, (error, groupList) => {
+            Array.from(groupList).forEach(function(group) {
+              if(group.$.id == idGroup) {
+                if(typeof group.mailList != 'undefined' && group.mailList.length > 0) {
+                  resolve(group.mailList);
+                } else {
+                  reject();
+                  openWindowAccount();
+                }
+              }
+            });
+          });
+        });
+      } else {
+        storage.get(storageFavoriteGroup, (error, groupList) => {
+          Array.from(groupList).forEach(function(group) {
+            if(group.$.id == idGroup) {
+              if(typeof group.mailList != 'undefined' && group.mailList.length > 0) {
+                resolve(group.mailList);
+              } else {
+                reject();
+                openWindowAccount();
+              }
+            }
+          });
+        });
+      }
+    });
+  });
 }
 
 function createTray() {
@@ -91,15 +258,21 @@ function createTray() {
     tray = null;
   }
 
-  getGroupList().then((groupList) => {
+  storage.get(storageFavoriteGroup, (error, groupList) => {
     tray = new Tray(__dirname + '\\images\\scout.ico');
 
     const menu = new Menu();
 
     Array.from(groupList).forEach(function(group) {
-      menu.append(new MenuItem({label: group.name, click() {
-        shell.openExternal("mailto:"+ group.mailList.join(";"))
-      }}))
+      if(group.favorite) {
+        menu.append(new MenuItem({
+          label: group.$.label, click() {
+            getGroupMailList(group.$.id).then(function(mailList) {
+              shell.openExternal("mailto:" + mailList.join(";"));
+            });
+          }
+        }))
+      }
     });
 
     menu.append(new MenuItem({label: "Refresh", click() {
@@ -116,7 +289,7 @@ function createTray() {
 
     tray.setToolTip('ScoutApps');
     tray.setContextMenu(menu);
-  })
+  });
 }
 
 function getGroupList(callback) {
@@ -137,30 +310,34 @@ function getGroupList(callback) {
   })
 }
 
-function getTokenAuthentication(login, password, callback) {
-  let account = {
-    authenticate: {
-      header: {
-        $: {
-          login: login,
-          password: password,
-          timeout: 30
+function getTokenAuthentication(login, password) {
+  return new promise((resolve, reject) => {
+    let account = {
+      authenticate: {
+        header: {
+          $: {
+            login: login,
+            password: password,
+            timeout: 30
+          }
         }
       }
-    }
-  };
+    };
 
-  let xml = builder.buildObject(account);
+    let xml = builder.buildObject(account);
 
-  let options = {
-    host : "vdoc-prod.vdocsuite.com",
-    path : '/vdoc/navigation/flow?module=portal&cmd=authenticate',
-    method: "POST"
-  };
+    let options = {
+      host: "vdoc-prod.vdocsuite.com",
+      path: '/vdoc/navigation/flow?module=portal&cmd=authenticate',
+      method: "POST"
+    };
 
-  executeRequest(options, xml, function(e) {
-    parser.parseString(e, function (err, result) {
-      callback(result, err);
+    executeRequest(options, xml).then(function (e) {
+      parser.parseString(e, function (err, result) {
+        resolve(result, err);
+      });
+    }, function(e) {
+      reject(e);
     });
   });
 }
@@ -204,7 +381,7 @@ function getListGroupUser() {
         method: "POST"
       };
 
-      executeRequest(options, xml, function(e) {
+      executeRequest(options, xml).then(function(e) {
         parser.parseString(e, function (err, result) {
           storage.set(storageGroupList, result, (error) => {
             if (error) throw error;
@@ -221,23 +398,25 @@ function getListGroupUser() {
   });
 }
 
-function executeRequest(options, body, callback) {
-  var req = http.request(options, function(res){
-    res.setEncoding('utf8');
-    let output='';
-    res.on('data',function(chunk){
-      output +=chunk;
-    });
+function executeRequest(options, body) {
+  return new promise((resolve, reject) => {
+    var req = http.request(options, function (res) {
+      res.setEncoding('utf8');
+      let output = '';
+      res.on('data', function (chunk) {
+        output += chunk;
+      });
 
-    res.on('end',function(){
-      callback(output);
+      res.on('end', function () {
+        resolve(output);
+      });
     });
+    req.on('error', function (e) {
+      reject(e)
+    });
+    req.write(body);
+    req.end();
   });
-  req.on('error',function(e){
-    callback(e)
-  });
-  req.write(body);
-  req.end();
 }
 
 function executeIntroduction() {
@@ -245,7 +424,7 @@ function executeIntroduction() {
     storage.get(storageAccountPassword, (error, data) => {
       if (error) throw error;
       if (typeof data.login != 'undefined' && data.password != 'undefined') {
-        getTokenAuthentication(data.login, data.password, function (body, err) {
+        getTokenAuthentication(data.login, data.password).then(function (body, err) {
           if (typeof body != 'undefined' && typeof body.authenticate != 'undefined') {
             authenticateToken = body.authenticate.body["0"].token["0"].$.key;
             resolve();
@@ -253,6 +432,8 @@ function executeIntroduction() {
             openWindowAccount();
             reject()
           }
+        }, function(e) {
+          reject(e);
         });
       } else {
         openWindowAccount();

@@ -12,14 +12,21 @@
     var vm = this;
 
     //@Method
+    vm.saveFavorite = saveFavorite;
 
     //@Variable
-
+    vm.groups = [];
 
     ipcRenderer.send('load-group-list', null);
 
     ipcRenderer.on('group-list-loaded', (event, arg) => {
-      console.log(arg); 
+      console.log(arg);
+      vm.groups = arg.view.body["0"].organization["0"].group;
+      $scope.$apply();
     });
+
+    function saveFavorite() {
+      ipcRenderer.send('save-group-favorite', vm.groups);
+    }
   }
 })();

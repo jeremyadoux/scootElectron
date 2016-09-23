@@ -6,21 +6,18 @@
     <link rel="stylesheet" href="./css/bootstrap.min.css">
     <link rel="stylesheet" href="./css/bootstrap-theme.min.css">
   </head>
-  <body ng-controller="">
+  <body ng-controller="favoriteCtrl as vm">
     <div class="container-fluid">
       <div class="row">
         <div class="col-md-8">
-          <form>
-            <div class="form-group">
-              <label for="groupTitle">Favorite</label>
-              <input type="textfield" class="form-control" id="groupTitle" placeholder="Account">
-            </div>
-            <div class="form-group">
-              <label for="emailList">plop</label>
-              <input type="password" class="form-control" id="emailList" placeholder="Password">
-            </div>
-            <button type="submit" class="btn btn-default">Save</button>
-          </form>
+          <h2>Ajouter les groupes utilisateurs à vos favoris</h2>
+          <ul>
+            <li ng-repeat="group in vm.groups">
+              <input type="checkbox" ng-model="group.favorite" />
+              {{group.$.label}}
+            </li>
+          </ul>
+          <input type="button" value="Enregistrer" ng-click="vm.saveFavorite()">
         </div>
       </div>
     </div>
