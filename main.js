@@ -101,7 +101,7 @@ function openWindowAccount () {
 
     // and load the index.html of the app.
     winAccount.loadURL(`file://${__dirname}/account.html`);
-    winAccount.openDevTools();
+    //winAccount.openDevTools();
     // Emitted when the window is closed.
     winAccount.on('close', (e) => {
       e.preventDefault();
@@ -119,7 +119,7 @@ function openWindowFavorite () {
 
     // and load the index.html of the app.
     winFavorite.loadURL(`file://${__dirname}/favorite.html`);
-    winFavorite.openDevTools();
+    //winFavorite.openDevTools();
     // Emitted when the window is closed.
     winFavorite.on('close', (e) => {
       e.preventDefault();
