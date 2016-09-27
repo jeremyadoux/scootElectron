@@ -19,6 +19,12 @@
 
     ipcRenderer.send('load-group-list', null);
 
+    ipcRenderer.send('test-ail-list', null);
+
+    ipcRenderer.on('plop', (event, arg) => {
+      console.log(arg);
+    });
+
     ipcRenderer.on('group-list-loaded', (event, arg) => {
       console.log(arg);
       vm.groups = arg.view.body["0"].organization["0"].group;

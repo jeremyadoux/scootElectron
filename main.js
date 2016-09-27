@@ -1,4 +1,4 @@
-const {app, BrowserWindow, Menu, Tray, MenuItem, shell, ipcMain} = require('electron');
+const {app, BrowserWindow, Menu, Tray, MenuItem, shell, ipcMain, clipboard, dialog } = require('electron');
 const xml2js = require('xml2js');
 const storage = require('electron-json-storage');
 const promisedrestclient = require('promised-rest-client')({url : ""});
@@ -18,6 +18,10 @@ let tray = null;
 let parser = new xml2js.Parser();
 let builder = new xml2js.Builder();
 let authenticateToken;
+
+let obj = {};
+let doubleClick = 0;
+let currentTimeout;
 
 app.on('ready', () => {
   createTray();
@@ -65,6 +69,10 @@ ipcMain.on('save-group-favorite', (event, arg) => {
     createTray();
     winFavorite.hide();
   });
+});
+
+ipcMain.on('test-ail-list', (event, arg) => {
+  event.sender.send('plop', obj);
 });
 
 function addFavoriteOnGroupList(groupList) {
@@ -195,8 +203,13 @@ function getGroupMailList(idGroup) {
                 storage.get(storageFavoriteGroup, (error, groupList) => {
                   Array.from(groupList).forEach(function(group) {
                     if(group.$.id == idGroup) {
-                      group.mailList = ['biloute@test.com'];
-                      storage.set(storageFavoriteGroup, group, (error) => {
+                      let mailList = [];
+                      for(var i in result.view.body[0].user) {
+                        mailList.push(result.view.body[0].user[i].$.email);
+                      }
+
+                      group.mailList = mailList;
+                      storage.set(storageFavoriteGroup, groupList, (error) => {
                         if (error) throw error;
 
                         resolve(group.mailList);
@@ -266,9 +279,14 @@ function createTray() {
     Array.from(groupList).forEach(function(group) {
       if(group.favorite) {
         menu.append(new MenuItem({
-          label: group.$.label, click() {
-            getGroupMailList(group.$.id).then(function(mailList) {
-              shell.openExternal("mailto:" + mailList.join(";"));
+          label: group.$.label, click(menuItem, browserWindows, event) {
+            //menuItem.commandId
+            getGroupMailList(group.$.id).then(function (mailList) {
+              if(event.ctrlKey) {
+                clipboard.writeText(mailList.join(";"));
+              } else {
+                shell.openExternal("mailto:" + mailList.join(";"));
+              }
             });
           }
         }))
@@ -443,28 +461,5 @@ function executeIntroduction() {
   });
 }
 
-/*
-// This method will be called when Electron has finished
-// initialization and is ready to create browser windows.
-// Some APIs can only be used after this event occurs.
-app.on('ready', createWindow)
-
-// Quit when all windows are closed.
-app.on('window-all-closed', () => {
-  // On macOS it is common for applications and their menu bar
-  // to stay active until the user quits explicitly with Cmd + Q
-  if (process.platform !== 'darwin') {
-    app.quit()
-  }
-})
-
-app.on('activate', () => {
-  // On macOS it's common to re-create a window in the app when the
-  // dock icon is clicked and there are no other windows open.
-  if (win === null) {
-    createWindow()
-  }
-})
-*/
 // In this file you can include the rest of your app's specific main process
 // code. You can also put them in separate files and require them here.
